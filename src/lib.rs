@@ -2,40 +2,46 @@ extern crate image;
 
 use image::{ ImageBuffer, RgbImage};
 
-// not even close to functional lol
+// closer to functional
 pub fn test() {
     let test_file = "./src/sample1.cr2";
     let image = rawloader::decode_file(test_file).unwrap();
 
     let mut output_buffer: RgbImage = ImageBuffer::new(image.width as u32, image.height as u32);
 
-
-    let mut x_pos = 0;
-    let mut y_pos = 0;
-    let mut marker = 0;
+    // you had a marker and an x_pos variable
+    // you just need x_pos and a bit of casting
+    let mut x_pos: u32 = 0;
+    let mut y_pos: u32 = 0;
 
     if let rawloader::RawImageData::Integer(data) = image.data {
-    for pix in data {
-      // output_buffer.put_pixel(x, y, pix)
-      if marker > 0 && marker % image.width == 0 {
+    for pix /* u16 */ in data {
+      if x_pos > 0 && x_pos % (image.width as u32) == 0 {
         y_pos += 1;
         x_pos = 0;
-        marker = 0;
       }
-      // output_buffer.put_pixel(x_pos, y_pos, image::Rgb([]))
+      
+      // so after after an hour of trying I realized I can't convert pix to rgb(a)
+      // because it doesn't store rbg(a) data...
+      // it stores Bayer data
+      // see https://en.wikipedia.org/wiki/Bayer_filter
 
-      let r = pix & 0xf;
-      let g = (pix >> 4) & 0xf;
-      let b = (pix >> 8) & 0xf;
-      let a = (pix as u32 >> 16) & 0xf;
+      // I can hack together a grey scale like in
+      // https://github.com/pedrocr/rawloader#usage though...
 
-      let values = rgb::RGBA::new(r as u8, g as u8, b as u8, a as u8).rgb();
-      let pixels = image::Rgb([values.r, values.g, values.b]);
+      // take a look at https://github.com/wangds/libbayer
+      // and see if you can use it to generate actually rgb data
 
-      output_buffer.put_pixel(x_pos, y_pos, pixels);
+      // also run this code through rustfmt
 
-      marker += 1;
+      // convert 12 bit color down to 8 bit
+      let grey = (pix >> 4) as u8;
 
+      let pixel = image::Rgb([grey, grey, grey]);
+
+      output_buffer.put_pixel(x_pos, y_pos, pixel);
+
+      x_pos += 1;
     }
 
     output_buffer.save("./src/test_raw.jpeg").expect("Could not save");
