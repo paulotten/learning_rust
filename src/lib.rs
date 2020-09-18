@@ -1,54 +1,42 @@
 extern crate image;
 
-use image::{ ImageBuffer, RgbImage};
+use image::{ImageBuffer, RgbImage};
 
-// closer to functional
 pub fn test() {
     let test_file = "./src/sample1.cr2";
     let image = rawloader::decode_file(test_file).unwrap();
 
-    let mut output_buffer: RgbImage = ImageBuffer::new(image.width as u32, image.height as u32);
-
-    // you had a marker and an x_pos variable
-    // you just need x_pos and a bit of casting
-    let mut x_pos: u32 = 0;
-    let mut y_pos: u32 = 0;
+    let mut output_buffer: RgbImage =
+        ImageBuffer::new((image.width / 2) as u32, (image.height / 2) as u32);
 
     if let rawloader::RawImageData::Integer(data) = image.data {
-    for pix /* u16 */ in data {
-      if x_pos > 0 && x_pos % (image.width as u32) == 0 {
-        y_pos += 1;
-        x_pos = 0;
-      }
-      
-      // so after after an hour of trying I realized I can't convert pix to rgb(a)
-      // because it doesn't store rbg(a) data...
-      // it stores Bayer data
-      // see https://en.wikipedia.org/wiki/Bayer_filter
+        let mut y: usize = 0;
 
-      // I can hack together a grey scale like in
-      // https://github.com/pedrocr/rawloader#usage though...
+        while y < (image.height / 2) {
+            let mut x: usize = 0;
 
-      // take a look at https://github.com/wangds/libbayer
-      // and see if you can use it to generate actually rgb data
+            while x < (image.width / 2) {
+                // see https://en.wikipedia.org/wiki/Bayer_filter
+                // I'm converting 4 Bayer pixels into one RGB pixel
+                let r = data[y * 2 * image.width + x * 2] >> 6;
+                let g1 = data[(y * 2) * image.width + x * 2 + 1] >> 6;
+                let g2 = data[(y * 2 + 1) * image.width + x * 2] >> 6;
+                let b = data[(y * 2 + 1) * image.width + x * 2 + 1] >> 6;
 
-      // also run this code through rustfmt
+                let pixel = image::Rgb([r as u8, ((g1 + g2) / 2) as u8, b as u8]);
 
-      // convert 12 bit color down to 8 bit
-      let grey = (pix >> 4) as u8;
+                output_buffer.put_pixel(x as u32, y as u32, pixel);
 
-      let pixel = image::Rgb([grey, grey, grey]);
-
-      output_buffer.put_pixel(x_pos, y_pos, pixel);
-
-      x_pos += 1;
+                x += 1;
+            }
+            y += 1;
+        }
+        output_buffer
+            .save("./src/test_raw.jpeg")
+            .expect("Could not save");
+    } else {
+        eprintln!("Don't know how to process non-integer raw files");
     }
-
-    output_buffer.save("./src/test_raw.jpeg").expect("Could not save");
-  } else {
-    eprintln!("Don't know how to process non-integer raw files");
-  }
-
 }
 
 #[cfg(test)]
